@@ -23,6 +23,7 @@ type ntcontext struct {
 	noiseSupressorState      int
 	paClient                 *pulseaudio.Client
 	librnnoise               string
+	pipeWirePluginReady      bool
 	sourceListColdWidthIndex int
 	config                   *config
 	licenseTextArea          nucular.TextEditor

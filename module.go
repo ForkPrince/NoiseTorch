@@ -197,13 +197,14 @@ func loadModule(ctx *ntcontext, module, args string) (uint32, error) {
 
 func loadPipeWireInput(ctx *ntcontext, inp *device) error {
 	log.Printf("Loading supressor for pipewire\n")
-	// PipeWire 1.6+ filter-graph LADSPA backend searches LADSPA dirs
-	// (e.g. /usr/lib/ladspa) and does not accept arbitrary /tmp paths.
-	// Pass the plugin name only; the .so must be installed to a LADSPA dir.
+	// PipeWire 1.6+ filter-graph LADSPA backend only searches LADSPA_PATH
+	// directories and rejects arbitrary /tmp paths, so pass the plugin by name.
+	// ensurePipeWirePlugin makes sure it is reachable from a LADSPA dir.
+	ensurePipeWirePlugin(ctx)
 	idx, err := loadModule(ctx, "module-ladspa-source",
 		fmt.Sprintf("source_name='Filtered Microphone for %s' master=%s "+
 			"rate=48000 channels=1 "+
-			"label=nt-filter plugin=rnnoise_ladspa control=%d", inp.Name, inp.ID, ctx.config.Threshold))
+			"label=nt-filter plugin=%s control=%d", inp.Name, inp.ID, ladspaPluginName, ctx.config.Threshold))
 
 	if err != nil {
 		return err
@@ -214,13 +215,14 @@ func loadPipeWireInput(ctx *ntcontext, inp *device) error {
 
 func loadPipeWireOutput(ctx *ntcontext, out *device) error {
 	log.Printf("Loading supressor for pipewire\n")
-	// PipeWire 1.6+ filter-graph LADSPA backend searches LADSPA dirs
-	// (e.g. /usr/lib/ladspa) and does not accept arbitrary /tmp paths.
-	// Pass the plugin name only; the .so must be installed to a LADSPA dir.
+	// PipeWire 1.6+ filter-graph LADSPA backend only searches LADSPA_PATH
+	// directories and rejects arbitrary /tmp paths, so pass the plugin by name.
+	// ensurePipeWirePlugin makes sure it is reachable from a LADSPA dir.
+	ensurePipeWirePlugin(ctx)
 	idx, err := loadModule(ctx, "module-ladspa-sink",
 		fmt.Sprintf("sink_name='Filtered Headphones' master=%s "+
 			"rate=48000 channels=1 "+
-			"label=nt-filter plugin=rnnoise_ladspa control=%d", out.ID, ctx.config.Threshold))
+			"label=nt-filter plugin=%s control=%d", out.ID, ladspaPluginName, ctx.config.Threshold))
 
 	if err != nil {
 		return err

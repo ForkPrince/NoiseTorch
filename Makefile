@@ -30,3 +30,6 @@ release: rnnoise
 rnnoise:
 	git submodule update --init --recursive
 	$(MAKE) -C c/ladspa
+install: rnnoise dev
+	install -Dm755 bin/noisetorch $(DESTDIR)$(PREFIX)/bin/noisetorch
+	install -Dm755 c/ladspa/rnnoise_ladspa.so $(DESTDIR)$(PREFIX)/lib/ladspa/rnnoise_ladspa.so
