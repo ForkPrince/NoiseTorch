@@ -48,11 +48,27 @@ func userLadspaDir() (string, error) {
 	return filepath.Join(home, ".local", "lib", "ladspa"), nil
 }
 
+// getPipeWirePulseLadspaPath is indirection over pipeWirePulseLadspaPath so
+// tests can stub out the running daemon.
+var getPipeWirePulseLadspaPath = pipeWirePulseLadspaPath
+
 // findInstalledLadspaPlugin returns the path of rnnoise_ladspa.so if it already
 // sits in a directory that PipeWire's filter-graph backend will search,
-// otherwise it returns "".
+// otherwise it returns "". The daemon's own LADSPA_PATH is considered in
+// addition to this process' defaults, so a previously configured setup (plugin
+// already copied to ~/.local/lib/ladspa) is treated as installed.
 func findInstalledLadspaPlugin() string {
-	for _, d := range ladspaSearchDirs() {
+	return findInstalledLadspaPluginIn(append(ladspaSearchDirs(),
+		filepath.SplitList(getPipeWirePulseLadspaPath())...))
+}
+
+func findInstalledLadspaPluginIn(dirs []string) string {
+	seen := make(map[string]bool)
+	for _, d := range dirs {
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
 		p := filepath.Join(d, ladspaPluginFile)
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
 			return p
@@ -166,7 +182,7 @@ func configurePipeWirePulseLadspa(userDir string) {
 	}
 
 	paths := []string{userDir}
-	for _, d := range filepath.SplitList(pipeWirePulseLadspaPath()) {
+	for _, d := range filepath.SplitList(getPipeWirePulseLadspaPath()) {
 		if d != "" && d != userDir {
 			paths = append(paths, d)
 		}

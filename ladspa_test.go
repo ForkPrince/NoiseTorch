@@ -28,7 +28,12 @@ func TestFindInstalledLadspaPlugin(t *testing.T) {
 
 func TestFindInstalledLadspaPluginNotInstalled(t *testing.T) {
 	os.Setenv("LADSPA_PATH", t.TempDir())
-	defer os.Unsetenv("LADSPA_PATH")
+	old := getPipeWirePulseLadspaPath
+	getPipeWirePulseLadspaPath = func() string { return "" }
+	defer func() {
+		os.Unsetenv("LADSPA_PATH")
+		getPipeWirePulseLadspaPath = old
+	}()
 
 	if got := findInstalledLadspaPlugin(); got != "" {
 		t.Fatalf("expected no plugin, got %q", got)
@@ -69,10 +74,14 @@ func TestEnsurePipeWirePluginInstallsOnDemand(t *testing.T) {
 	os.Setenv("HOME", home)
 	os.Setenv("XDG_CONFIG_HOME", cfg)
 	os.Setenv("LADSPA_PATH", "")
+
+	old := getPipeWirePulseLadspaPath
+	getPipeWirePulseLadspaPath = func() string { return "" }
 	defer func() {
 		os.Unsetenv("HOME")
 		os.Unsetenv("XDG_CONFIG_HOME")
 		os.Unsetenv("LADSPA_PATH")
+		getPipeWirePulseLadspaPath = old
 	}()
 
 	ctx := &ntcontext{}
