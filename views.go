@@ -25,7 +25,8 @@ func (v *ViewStack) Push(f ViewFunc) {
 
 func (v *ViewStack) Pop() ViewFunc {
 	if len(v.items) == 0 {
-		log.Fatal("Tried to Pop an empty ViewStack")
+		log.Println("Tried to Pop an empty ViewStack")
+		return nil
 	}
 
 	item := v.items[len(v.items)-1]
@@ -38,7 +39,7 @@ func (v *ViewStack) Pop() ViewFunc {
 
 func (v *ViewStack) Peek() ViewFunc {
 	if len(v.items) == 0 {
-		log.Fatal("Tried to Peek an empty ViewStack")
+		return nil
 	}
 
 	return v.items[len(v.items)-1]

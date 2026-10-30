@@ -131,28 +131,31 @@ func supressorState(ctx *ntcontext) (int, bool) {
 }
 
 func loadSupressor(ctx *ntcontext, inp *device, out *device) error {
-	if ctx.serverInfo.servertype == servertype_pulse {
+	if ctx.serverInfo.servertype == servertype_pipewire {
+		if err := ensurePipeWirePlugin(ctx); err != nil {
+			return fmt.Errorf("could not prepare the LADSPA plugin for PipeWire: %w", err)
+		}
+	} else {
 		log.Printf("Querying pulse rlimit\n")
 		pid, err := getPulsePid()
 		if err != nil {
-			return err
+			// don't abort the whole load just because we can't find the
+			// daemon pid; the module load below will fail visibly if the
+			// rlimit actually blocks it
+			log.Printf("Could not get pulseaudio pid, continuing without rlimit removal: %v\n", err)
+		} else if lim, err := getRlimit(pid); err != nil {
+			log.Printf("Could not get pulseaudio rlimit, continuing without rlimit removal: %v\n", err)
+		} else {
+			log.Printf("Rlimit: %+v. Trying to remove.\n", lim)
+
+			removeRlimit(pid)
+
+			defer setRlimit(pid, &lim) // lowering RLIMIT doesn't require root
+
+			if newLim, err := getRlimit(pid); err == nil {
+				log.Printf("Rlimit: %+v\n", newLim)
+			}
 		}
-
-		lim, err := getRlimit(pid)
-		if err != nil {
-			return err
-		}
-		log.Printf("Rlimit: %+v. Trying to remove.\n", lim)
-
-		removeRlimit(pid)
-
-		defer setRlimit(pid, &lim) // lowering RLIMIT doesn't require root
-
-		newLim, err := getRlimit(pid)
-		if err != nil {
-			return err
-		}
-		log.Printf("Rlimit: %+v\n", newLim)
 	}
 
 	if inp.checked {
@@ -185,26 +188,20 @@ func loadSupressor(ctx *ntcontext, inp *device, out *device) error {
 }
 
 func loadModule(ctx *ntcontext, module, args string) (uint32, error) {
-	idx, err := ctx.paClient.LoadModule(module, args)
-
-	//14 = module initialisation failed
-	if paErr, ok := err.(*pulseaudio.Error); ok && paErr.Code == 14 {
-		resetUI(ctx)
-		ctx.views.Push(makeErrorView(ctx, fmt.Sprintf("Could not load module '%s'. This is likely a problem with your system or distribution.", module)))
-	}
-	return idx, err
+	// errors are surfaced by the caller (UI error view or CLI stderr),
+	// not only for PA error code 14
+	return ctx.paClient.LoadModule(module, args)
 }
 
 func loadPipeWireInput(ctx *ntcontext, inp *device) error {
 	log.Printf("Loading supressor for pipewire\n")
-	// PipeWire 1.6+ filter-graph LADSPA backend only searches LADSPA_PATH
-	// directories and rejects arbitrary /tmp paths, so pass the plugin by name.
-	// ensurePipeWirePlugin makes sure it is reachable from a LADSPA dir.
-	ensurePipeWirePlugin(ctx)
+	// PipeWire >= 1.6.3 only resolves plugins by name from a LADSPA_PATH dir
+	// (ensurePipeWirePlugin, called from loadSupressor, makes sure the plugin
+	// is reachable); older versions also accept the dumped /tmp path.
 	idx, err := loadModule(ctx, "module-ladspa-source",
 		fmt.Sprintf("source_name='Filtered Microphone for %s' master=%s "+
 			"rate=48000 channels=1 "+
-			"label=nt-filter plugin=%s control=%d", inp.Name, inp.ID, ladspaPluginName, ctx.config.Threshold))
+			"label=nt-filter plugin=%s control=%d", inp.Name, inp.ID, pipeWirePluginArg(ctx), ctx.config.Threshold))
 
 	if err != nil {
 		return err
@@ -215,14 +212,10 @@ func loadPipeWireInput(ctx *ntcontext, inp *device) error {
 
 func loadPipeWireOutput(ctx *ntcontext, out *device) error {
 	log.Printf("Loading supressor for pipewire\n")
-	// PipeWire 1.6+ filter-graph LADSPA backend only searches LADSPA_PATH
-	// directories and rejects arbitrary /tmp paths, so pass the plugin by name.
-	// ensurePipeWirePlugin makes sure it is reachable from a LADSPA dir.
-	ensurePipeWirePlugin(ctx)
 	idx, err := loadModule(ctx, "module-ladspa-sink",
 		fmt.Sprintf("sink_name='Filtered Headphones' master=%s "+
 			"rate=48000 channels=1 "+
-			"label=nt-filter plugin=%s control=%d", out.ID, ladspaPluginName, ctx.config.Threshold))
+			"label=nt-filter plugin=%s control=%d", out.ID, pipeWirePluginArg(ctx), ctx.config.Threshold))
 
 	if err != nil {
 		return err

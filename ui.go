@@ -37,7 +37,7 @@ type ntcontext struct {
 	virtualDeviceInUse       bool
 }
 
-//TODO pull some of these strucs out of UI, they don't belong here
+// TODO pull some of these strucs out of UI, they don't belong here
 type audioserverinfo struct {
 	servertype       uint
 	name             string
@@ -61,6 +61,12 @@ const notice = "NoiseTorch Next Gen (stylized NoiseTorch-ng) is a continuation o
 
 func updatefn(ctx *ntcontext, w *nucular.Window) {
 	currView := ctx.views.Peek()
+	if currView == nil {
+		// the stack can be emptied when the audio server restarts mid-load
+		// and the connection watchdog resets the UI
+		currView = mainView
+		ctx.views.Push(currView)
+	}
 	currView(ctx, w)
 }
 
@@ -276,6 +282,10 @@ func uiUnloadFilters(ctx *ntcontext) {
 	ctx.views.Push(loadingView)
 	if err := unloadSupressor(ctx); err != nil {
 		log.Println(err)
+		resetUI(ctx)
+		ctx.views.Push(makeErrorView(ctx, fmt.Sprintf("Could not unload filter(s): %v", err)))
+		(*ctx.masterWindow).Changed()
+		return
 	}
 	//wait until PA reports it has actually loaded it, timeout at 10s
 	for i := 0; i < 20; i++ {
@@ -288,6 +298,17 @@ func uiUnloadFilters(ctx *ntcontext) {
 }
 
 func uiReloadFilters(ctx *ntcontext, inp, out device) {
+	// make sure the LADSPA plugin is reachable before showing the loading
+	// view; on PipeWire >= 1.6.3 this may restart pipewire-pulse once, which
+	// makes the connection watchdog reset the view stack
+	if err := ensurePipeWirePlugin(ctx); err != nil {
+		log.Println(err)
+		resetUI(ctx)
+		ctx.views.Push(makeErrorView(ctx, err.Error()))
+		(*ctx.masterWindow).Changed()
+		return
+	}
+
 	ctx.views.Push(loadingView)
 	if ctx.noiseSupressorState == loaded {
 		if err := unloadSupressor(ctx); err != nil {
@@ -296,6 +317,10 @@ func uiReloadFilters(ctx *ntcontext, inp, out device) {
 	}
 	if err := loadSupressor(ctx, &inp, &out); err != nil {
 		log.Println(err)
+		resetUI(ctx)
+		ctx.views.Push(makeErrorView(ctx, fmt.Sprintf("Could not load filter(s): %v", err)))
+		(*ctx.masterWindow).Changed()
+		return
 	}
 
 	//wait until PA reports it has actually loaded it, timeout at 10s
