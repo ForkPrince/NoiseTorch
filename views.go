@@ -6,10 +6,12 @@ package main
 import (
 	"log"
 
-	"github.com/aarzilli/nucular"
+	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
-type ViewFunc func(ctx *ntcontext, w *nucular.Window)
+// ViewFunc builds the widget tree for one screen of the UI. Views are
+// rebuilt from ntcontext state on every refresh, nucular-style.
+type ViewFunc func(ctx *ntcontext) gtk.Widgetter
 
 type ViewStack struct {
 	items []ViewFunc

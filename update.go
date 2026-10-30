@@ -116,7 +116,7 @@ func update(ctx *ntcontext) {
 	if err != nil {
 		log.Println("Couldn't fetch signature", err)
 		ctx.update.updatingText = "Update failed!"
-		(*ctx.masterWindow).Changed()
+		refreshUI(ctx)
 		return
 	}
 
@@ -124,7 +124,7 @@ func update(ctx *ntcontext) {
 	if err != nil {
 		log.Println("Couldn't fetch tgz", err)
 		ctx.update.updatingText = "Update failed!"
-		(*ctx.masterWindow).Changed()
+		refreshUI(ctx)
 		return
 	}
 
@@ -135,7 +135,7 @@ func update(ctx *ntcontext) {
 	if !verified {
 		log.Printf("SIGNATURE VERIFICATION FAILED, ABORTING UPDATE!\n")
 		ctx.update.updatingText = "Update failed!"
-		(*ctx.masterWindow).Changed()
+		refreshUI(ctx)
 		return
 	}
 
@@ -144,7 +144,7 @@ func update(ctx *ntcontext) {
 
 	log.Printf("Update installed!\n")
 	ctx.update.updatingText = "Update installed! (Restart the program to apply)"
-	(*ctx.masterWindow).Changed()
+	refreshUI(ctx)
 }
 
 func fetchFile(file string) ([]byte, error) {

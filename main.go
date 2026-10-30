@@ -5,26 +5,22 @@ package main
 
 import (
 	"fmt"
-	"image"
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/xgbutil"
-	"github.com/BurntSushi/xgbutil/ewmh"
-	"github.com/BurntSushi/xgbutil/icccm"
-	"github.com/aarzilli/nucular/font"
+	"github.com/diamondburned/gotk4/pkg/gio/v2"
+	"github.com/diamondburned/gotk4/pkg/glib/v2"
+	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 
 	"github.com/noisetorch/pulseaudio"
 
 	_ "embed"
-
-	"github.com/aarzilli/nucular"
-	"github.com/aarzilli/nucular/style"
 )
 
 //go:generate go run scripts/embedlicenses.go
@@ -76,7 +72,10 @@ func main() {
 	doCLI(opt, ctx.config, ctx.librnnoise)
 
 	if ctx.config.EnableUpdates {
-		go updateCheck(&ctx)
+		go func() {
+			updateCheck(&ctx)
+			refreshUI(&ctx)
+		}()
 	}
 
 	ctx.haveCapabilities = hasCapSysResource(getCurrentCaps())
@@ -84,25 +83,56 @@ func main() {
 
 	resetUI(&ctx)
 
-	wnd := nucular.NewMasterWindowSize(0, appName, image.Point{600, 400}, func(w *nucular.Window) {
-		updatefn(&ctx, w)
-	})
+	// The application ID sets the Wayland app_id and the X11 WM_CLASS,
+	// so the window shows up properly in taskbars/docks on both protocols.
+	app := gtk.NewApplication("io.github.noisetorch.NoiseTorch", gio.ApplicationDefaultFlags)
+	ctx.app = app
+	registerMenuActions(&ctx, app)
 
-	ctx.masterWindow = &wnd
-	(*ctx.masterWindow).Changed()
+	app.ConnectActivate(func() {
+		win := gtk.NewApplicationWindow(app)
+		win.SetTitle(appName)
+		win.SetDefaultSize(600, 400)
+		ctx.window = win
+
+		header := gtk.NewHeaderBar()
+		menu := gio.NewMenu()
+		about := gio.NewMenu()
+		about.Append("Licenses", "app.licenses")
+		about.Append("Website", "app.website")
+		about.Append("Version", "app.version")
+		menu.AppendSubmenu("About", about)
+		menuBtn := gtk.NewMenuButton()
+		menuBtn.SetIconName("open-menu-symbolic")
+		menuBtn.SetMenuModel(menu)
+		menuBtn.SetTooltipText("About")
+		header.PackEnd(menuBtn)
+		win.SetTitlebar(header)
+
+		rebuildUI(&ctx)
+		win.Present()
+	})
 
 	go paConnectionWatchdog(&ctx)
 
-	style := style.FromTheme(style.DarkTheme, 2.0)
-	style.Font = font.DefaultFont(16, 1)
-	wnd.SetStyle(style)
+	// pass only argv[0]: GApplication would reject our own CLI flags
+	exitCode := app.Run([]string{os.Args[0]})
+	removeLib(rnnoisefile)
+	os.Exit(exitCode)
+}
 
-	//this is a disgusting hack that searches for the noisetorch window
-	//and then fixes up the WM_CLASS attribute so it displays
-	//properly in the taskbar
-	go fixWindowClass()
-	wnd.Main()
+func registerMenuActions(ctx *ntcontext, app *gtk.Application) {
+	licenses := gio.NewSimpleAction("licenses", nil)
+	licenses.ConnectActivate(func(_ *glib.Variant) { uiPush(ctx, licenseView) })
+	app.AddAction(licenses)
 
+	website := gio.NewSimpleAction("website", nil)
+	website.ConnectActivate(func(_ *glib.Variant) { exec.Command("xdg-open", websiteURL).Run() })
+	app.AddAction(website)
+
+	versionAction := gio.NewSimpleAction("version", nil)
+	versionAction.ConnectActivate(func(_ *glib.Variant) { uiPush(ctx, versionView) })
+	app.AddAction(versionAction)
 }
 
 func dumpLib() string {
@@ -195,8 +225,7 @@ func paConnectionWatchdog(ctx *ntcontext) {
 			continue
 		}
 
-		ctx.views.Push(connectView)
-		(*ctx.masterWindow).Changed()
+		uiPush(ctx, connectView)
 
 		paClient, err := pulseaudio.NewClient()
 		if err != nil {
@@ -219,7 +248,7 @@ func paConnectionWatchdog(ctx *ntcontext) {
 		ctx.outputList = preselectDevice(ctx, getSinks(ctx, paClient), ctx.config.LastUsedOutput, getDefaultSinkID)
 
 		resetUI(ctx)
-		(*ctx.masterWindow).Changed()
+		refreshUI(ctx)
 
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -333,36 +362,4 @@ func getDefaultSinkID(client *pulseaudio.Client) (string, error) {
 		return "", err
 	}
 	return server.DefaultSink, nil
-}
-
-// this is disgusting
-func fixWindowClass() {
-	xu, err := xgbutil.NewConn()
-	defer xu.Conn().Close()
-	if err != nil {
-		log.Printf("Couldn't create XU xdg conn: %+v\n", err)
-		return
-	}
-	for i := 0; i < 100; i++ {
-		wnds, _ := ewmh.ClientListGet(xu)
-		for _, w := range wnds {
-			n, _ := ewmh.WmNameGet(xu, w)
-			if n == appName {
-				_, err := icccm.WmClassGet(xu, w)
-				//if we have *NO* WM_CLASS, then the above call errors. We *want* to make sure this errors
-				if err == nil {
-					continue
-				}
-
-				class := icccm.WmClass{}
-				class.Class = appName
-				class.Instance = appName
-				icccm.WmClassSet(xu, w, &class)
-				return
-			}
-
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
 }

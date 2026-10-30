@@ -68,6 +68,8 @@ With gnome this can be done with:
 
 You now have a `noisetorch` binary and desktop entry on your system.
 
+The binary is now dynamically linked against GTK4, so make sure the GTK4 runtime is installed (`libgtk-4-1` on Debian/Ubuntu, `gtk4.0` on Alpine, `gtk4` on Fedora). It runs natively on both Wayland and X11.
+
 Give it the required permissions with `setcap`:
 
     sudo setcap 'CAP_SYS_RESOURCE=+ep' ~/.local/bin/noisetorch
@@ -122,7 +124,13 @@ Output filtering currently introduces something on the order of ~100ms with puls
 
 ## Building from source
 
-Install the Go compiler from [golang.org](https://golang.org/). And make sure you have a working C++ compiler.
+Install the Go compiler from [golang.org](https://golang.org/). The UI uses GTK4 (via cgo), so you also need a C compiler and the GTK4 development files, plus the GNOME icon theme at runtime. On Alpine Linux:
+
+```shell
+apk add go build-base pkgconf gtk4.0-dev gobject-introspection-dev adwaita-icon-theme
+```
+
+On Debian/Ubuntu: `apt install golang build-essential libgtk-4-dev libglib2.0-dev adwaita-icon-theme`. The app runs natively on Wayland (GTK4's default there) and on X11.
 
 ```shell
  git clone https://github.com/noisetorch/NoiseTorch # Clone the repository

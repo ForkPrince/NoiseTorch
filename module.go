@@ -28,6 +28,7 @@ func updateNoiseSupressorLoaded(ctx *ntcontext) {
 
 	for {
 		ctx.noiseSupressorState, ctx.virtualDeviceInUse = supressorState(ctx)
+		refreshUI(ctx)
 		if !c.Connected() {
 			break
 		}
