@@ -92,7 +92,7 @@ func main() {
 	app.ConnectActivate(func() {
 		win := gtk.NewApplicationWindow(app)
 		win.SetTitle(appName)
-		win.SetDefaultSize(600, 400)
+		win.SetDefaultSize(640, 520)
 		ctx.window = win
 
 		header := gtk.NewHeaderBar()
@@ -225,12 +225,14 @@ func paConnectionWatchdog(ctx *ntcontext) {
 			continue
 		}
 
-		uiPush(ctx, connectView)
+		uiShowConnecting(ctx)
 
 		paClient, err := pulseaudio.NewClient()
 		if err != nil {
 			log.Printf("Couldn't create pulseaudio client: %v\n", err)
 			fmt.Fprintf(os.Stderr, "Couldn't create pulseaudio client: %v\n", err)
+			time.Sleep(500 * time.Millisecond)
+			continue
 		}
 
 		info, err := serverInfo(paClient)
@@ -247,8 +249,10 @@ func paConnectionWatchdog(ctx *ntcontext) {
 		ctx.inputList = preselectDevice(ctx, getSources(ctx, paClient), ctx.config.LastUsedInput, getDefaultSourceID)
 		ctx.outputList = preselectDevice(ctx, getSinks(ctx, paClient), ctx.config.LastUsedOutput, getDefaultSinkID)
 
-		resetUI(ctx)
-		refreshUI(ctx)
+		// Reset the view stack on the GTK main thread, after the "connecting"
+		// view has been queued. Otherwise the queued connect view can land on
+		// top of the freshly reset stack and the UI stays stuck on it.
+		uiReset(ctx)
 
 		time.Sleep(500 * time.Millisecond)
 	}
