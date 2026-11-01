@@ -202,9 +202,9 @@ func filterStatus(ctx *ntcontext) (title, detail, icon, class string) {
 	switch ctx.noiseSupressorState {
 	case loaded:
 		if ctx.virtualDeviceInUse {
-			return "Filtering active", "The virtual device is currently in use.", "emblem-ok-symbolic", "success"
+			return "Filtering active", "The virtual device is currently in use.", "object-select-symbolic", "success"
 		}
-		return "Filtering active", "The filter is loaded. Select the virtual device in your application.", "emblem-ok-symbolic", "success"
+		return "Filtering active", "The filter is loaded. Select the virtual device in your application.", "object-select-symbolic", "success"
 	case inconsistent:
 		return "Inconsistent state", "Unload the filter(s) before loading again.", "dialog-warning-symbolic", "warning"
 	default:
@@ -358,11 +358,6 @@ func mainView(ctx *ntcontext) gtk.Widgetter {
 	box := newViewBox()
 
 	box.Append(statusCard(ctx))
-
-	if ctx.serverInfo.servertype == servertype_pipewire {
-		box.Append(noticeCard("Running in PipeWire mode. PipeWire support is currently alpha quality. Please report bugs.",
-			"dialog-information-symbolic", ""))
-	}
 
 	if ctx.update.available && !ctx.update.triggered {
 		row := gtk.NewBox(gtk.OrientationHorizontal, 12)

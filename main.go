@@ -8,14 +8,12 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
-	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 
 	"github.com/noisetorch/pulseaudio"
@@ -87,26 +85,20 @@ func main() {
 	// so the window shows up properly in taskbars/docks on both protocols.
 	app := gtk.NewApplication("io.github.noisetorch.NoiseTorch", gio.ApplicationDefaultFlags)
 	ctx.app = app
-	registerMenuActions(&ctx, app)
 
 	app.ConnectActivate(func() {
+		applySystemTheme()
+
 		win := gtk.NewApplicationWindow(app)
-		win.SetTitle(appName)
+		win.SetTitle("NoiseTorch")
 		win.SetDefaultSize(640, 520)
 		ctx.window = win
 
 		header := gtk.NewHeaderBar()
-		menu := gio.NewMenu()
-		about := gio.NewMenu()
-		about.Append("Licenses", "app.licenses")
-		about.Append("Website", "app.website")
-		about.Append("Version", "app.version")
-		menu.AppendSubmenu("About", about)
-		menuBtn := gtk.NewMenuButton()
-		menuBtn.SetIconName("open-menu-symbolic")
-		menuBtn.SetMenuModel(menu)
-		menuBtn.SetTooltipText("About")
-		header.PackEnd(menuBtn)
+		licensesBtn := gtk.NewButtonWithLabel("Licenses")
+		licensesBtn.SetTooltipText("Show license information")
+		licensesBtn.ConnectClicked(func() { uiPush(&ctx, licenseView) })
+		header.PackEnd(licensesBtn)
 		win.SetTitlebar(header)
 
 		rebuildUI(&ctx)
@@ -119,20 +111,6 @@ func main() {
 	exitCode := app.Run([]string{os.Args[0]})
 	removeLib(rnnoisefile)
 	os.Exit(exitCode)
-}
-
-func registerMenuActions(ctx *ntcontext, app *gtk.Application) {
-	licenses := gio.NewSimpleAction("licenses", nil)
-	licenses.ConnectActivate(func(_ *glib.Variant) { uiPush(ctx, licenseView) })
-	app.AddAction(licenses)
-
-	website := gio.NewSimpleAction("website", nil)
-	website.ConnectActivate(func(_ *glib.Variant) { exec.Command("xdg-open", websiteURL).Run() })
-	app.AddAction(website)
-
-	versionAction := gio.NewSimpleAction("version", nil)
-	versionAction.ConnectActivate(func(_ *glib.Variant) { uiPush(ctx, versionView) })
-	app.AddAction(versionAction)
 }
 
 func dumpLib() string {
