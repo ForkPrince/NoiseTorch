@@ -95,9 +95,15 @@ func main() {
 		ctx.window = win
 
 		header := gtk.NewHeaderBar()
-		licensesBtn := gtk.NewButtonWithLabel("Licenses")
+		licensesBtn := gtk.NewToggleButtonWithLabel("Licenses")
 		licensesBtn.SetTooltipText("Show license information")
-		licensesBtn.ConnectClicked(func() { uiPush(&ctx, licenseView) })
+		licensesBtn.ConnectToggled(func() {
+			if licensesBtn.Active() {
+				uiPush(&ctx, licenseView)
+			} else {
+				uiPopView(&ctx, licenseView)
+			}
+		})
 		header.PackEnd(licensesBtn)
 		win.SetTitlebar(header)
 

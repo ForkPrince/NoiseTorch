@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"syscall"
 	"time"
 
@@ -49,8 +50,6 @@ const (
 	servertype_pipewire
 )
 
-const notice = "NoiseTorch Next Gen (stylized NoiseTorch-ng) is a continuation of the NoiseTorch\nproject after it was abandoned by its original author. Please do not confuse\nboth programs. You may convey modified versions of this program under its name."
-
 // uiDo runs f on the GTK main thread. It is safe to call from any goroutine.
 func uiDo(f func()) {
 	glib.IdleAdd(func() bool {
@@ -92,6 +91,19 @@ func uiPush(ctx *ntcontext, v ViewFunc) {
 
 func uiPop(ctx *ntcontext) {
 	uiDo(func() {
+		ctx.views.Pop()
+		rebuildUI(ctx)
+	})
+}
+
+// uiPopView pops v only if it is the top view, so a stale toggle can never
+// pop a view it did not push.
+func uiPopView(ctx *ntcontext, v ViewFunc) {
+	uiDo(func() {
+		top := ctx.views.Peek()
+		if top == nil || reflect.ValueOf(top).Pointer() != reflect.ValueOf(v).Pointer() {
+			return
+		}
 		ctx.views.Pop()
 		rebuildUI(ctx)
 	})
@@ -654,7 +666,6 @@ func loadingView(ctx *ntcontext) gtk.Widgetter {
 
 func licenseView(ctx *ntcontext) gtk.Widgetter {
 	box := newViewBox()
-	box.Append(centeredLabel(notice))
 
 	tv := gtk.NewTextView()
 	tv.SetEditable(false)
@@ -667,23 +678,6 @@ func licenseView(ctx *ntcontext) gtk.Widgetter {
 	tv.Buffer().SetText(licenseString)
 	tv.SetVExpand(true)
 	box.Append(tv)
-
-	okBtn := gtk.NewButtonWithLabel("OK")
-	okBtn.SetHAlign(gtk.AlignCenter)
-	okBtn.ConnectClicked(func() { uiPop(ctx) })
-	box.Append(okBtn)
-	return box
-}
-
-func versionView(ctx *ntcontext) gtk.Widgetter {
-	box := newViewBox()
-	box.Append(centeredLabel("Version"))
-	box.Append(centeredLabel(notice))
-	box.Append(centeredLabel(fmt.Sprintf("%s (%s)", version, distribution)))
-	okBtn := gtk.NewButtonWithLabel("OK")
-	okBtn.SetHAlign(gtk.AlignCenter)
-	okBtn.ConnectClicked(func() { uiPop(ctx) })
-	box.Append(okBtn)
 	return box
 }
 
